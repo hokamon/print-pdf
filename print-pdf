@@ -1,0 +1,83 @@
+#!/bin/zsh
+
+
+# pdftk "$1" cat "$2" output out.pdf 
+# pdf2ps out.pdf
+# ps2br3 <out.ps>out.br3
+# lpr out.br3
+
+# rm out.pdf out.ps out.br3
+ 
+
+function usage {
+    echo "$script_name [OPTION] PDF_NAME
+    -p - Specify page range to be printed
+    -n - Specify the number of copies to be printed
+    -s - simplex printing
+    -h - Show this help"
+    exit
+}
+
+while getopts p:n:h:s:4 OPT
+do
+ case $OPT in
+     p) FLG_P=1 ; RANGE=$OPTARG
+	;;
+     n) FLG_N=1 ; NUMBER=$OPTARG
+	;;
+     s) FLG_S=1 ;
+	;;
+     4) FLG_4=1 ;
+	;;
+     h) usage
+	;;
+ esac
+done; shift `expr $OPTIND - 1`
+
+White=`echo ~/blanksheet-a4-portrait.pdf`
+
+#filename=`echo $1 | cut -d\. -f 1`
+filename=`echo $1`
+
+
+if [ -n "$FLG_P" ]; then    
+    pdftk "$filename" cat "$RANGE" output out.pdf
+else
+    cp $filename out.pdf
+fi
+
+if [ -n "$FLG_S" ]; then
+    mkdir -m 777 burst
+    pdftk out.pdf burst output burst/bursted%d.pdf
+    NumberOfPages=`cat burst/doc_data.txt | grep NumberOf |cut -d\  -f 2`
+    pdftk burst/bursted1.pdf $White output tmp2.pdf 
+    for i in `seq 2 $NumberOfPages`
+    do
+	k=`expr $i + 1`
+	pdftk tmp$i.pdf burst/bursted$i.pdf $White output tmp$k.pdf
+    done
+    cp tmp$k.pdf out.pdf
+    rm -r tmp*.pdf burst
+fi
+
+if [ -n "$FLG_4" ]; then
+    pdfnup --nup 2x2 out.pdf
+    pdfjoin --paper a4paper --landscape --fitpaper false out-nup.pdf --outfile out.pdf
+    pdftk out.pdf cat 1-endwest output tmp.pdf
+    pdftk A=tmp.pdf shuffle Aodd Aeveneast output out.pdf
+    rm tmp.pdf out-nup.pdf
+fi
+
+pdf2ps out.pdf
+ps2br3 <out.ps>out.br3
+
+if [ -n "$FLG_N" ]; then    
+    for i in `seq $NUMBER`
+    do
+	lpr out.br3
+    done
+else
+    lpr out.br3
+fi
+
+rm out.pdf out.ps out.br3
